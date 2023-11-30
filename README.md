@@ -113,3 +113,109 @@ __global__ void reduceUnrolling16 (int *g_idata, int *g_odata, unsigned int n)
     if (tid == 0) g_odata[blockIdx.x] = idata[0];
 }
 ```
+## Exp-4 Matrix addition with unified memory
+```cu
+__global__ void sumMatrixGPU(float *MatA, float *MatB, float *MatC, int nx, int ny)
+{
+    unsigned int ix = threadIdx.x + blockIdx.x * blockDim.x;
+    unsigned int iy = threadIdx.y + blockIdx.y * blockDim.y;
+    unsigned int idx = iy * nx + ix;
+
+    if (ix < nx && iy < ny)
+    {
+        MatC[idx] = MatA[idx] + MatB[idx];
+    }
+}
+```
+## Exp-5 Matrix maltiplication using cuda c
+```cu
+__global__ void matrixMultiply(int *a, int *b, int *c, int size)
+{
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int sum = 0;
+    for (int k = 0; k < size; ++k)
+    {
+        sum += a[row * size + k] * b[k * size + col];
+    }
+    c[row * size + col] = sum;
+}
+```
+## Exp-6 Demonstrate Matrix transposition on shared memory
+```cu
+__global__ void setRowReadRow(int *out)
+{
+    __shared__ int tile[BDIMY][BDIMX];
+    unsigned int idx = threadIdx.y * blockDim.x + threadIdx.x;
+    tile[threadIdx.y][threadIdx.x] = idx;
+    __syncthreads();
+    out[idx] = tile[threadIdx.y][threadIdx.x] ;
+}
+
+__global__ void setColReadCol(int *out)
+{
+    __shared__ int tile[BDIMX][BDIMY];
+    unsigned int idx = threadIdx.y * blockDim.x + threadIdx.x;
+    tile[threadIdx.x][threadIdx.y] = idx;
+    __syncthreads();
+    out[idx] = tile[threadIdx.x][threadIdx.y];
+}
+
+__global__ void setColReadCol2(int *out)
+{
+    __shared__ int tile[BDIMY][BDIMX];
+    unsigned int idx = threadIdx.y * blockDim.x + threadIdx.x;
+    unsigned int irow = idx / blockDim.y;
+    unsigned int icol = idx % blockDim.y;
+    tile[icol][irow] = idx;
+    __syncthreads();
+    out[idx] = tile[icol][irow] ;
+}
+
+__global__ void setRowReadCol(int *out)
+{
+    __shared__ int tile[BDIMY][BDIMX];
+    unsigned int idx = threadIdx.y * blockDim.x + threadIdx.x;
+    unsigned int irow = idx / blockDim.y;
+    unsigned int icol = idx % blockDim.y;
+    tile[threadIdx.y][threadIdx.x] = idx;
+    __syncthreads();
+    out[idx] = tile[icol][irow];
+}
+
+__global__ void setRowReadColPad(int *out)
+{
+    __shared__ int tile[BDIMY][BDIMX + IPAD];
+    unsigned int idx = threadIdx.y * blockDim.x + threadIdx.x;
+    unsigned int irow = idx / blockDim.y;
+    unsigned int icol = idx % blockDim.y;
+    tile[threadIdx.y][threadIdx.x] = idx;
+    __syncthreads();
+    out[idx] = tile[icol][irow] ;
+}
+
+__global__ void setRowReadColDyn(int *out)
+{
+    extern  __shared__ int tile[];
+    unsigned int idx = threadIdx.y * blockDim.x + threadIdx.x;
+    unsigned int irow = idx / blockDim.y;
+    unsigned int icol = idx % blockDim.y;
+    unsigned int col_idx = icol * blockDim.x + irow;
+    tile[idx] = idx;
+    __syncthreads();
+    out[idx] = tile[col_idx];
+}
+
+__global__ void setRowReadColDynPad(int *out)
+{
+    extern  __shared__ int tile[];
+    unsigned int g_idx = threadIdx.y * blockDim.x + threadIdx.x;
+    unsigned int irow = g_idx / blockDim.y;
+    unsigned int icol = g_idx % blockDim.y;
+    unsigned int row_idx = threadIdx.y * (blockDim.x + IPAD) + threadIdx.x;
+    unsigned int col_idx = icol * (blockDim.x + IPAD) + irow;
+    tile[row_idx] = g_idx;
+    __syncthreads();
+    out[g_idx] = tile[col_idx];
+}
+```
